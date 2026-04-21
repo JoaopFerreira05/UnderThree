@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Undyne Fight</title>
+</head>
+<body style="margin:0;padding:0;background:#000;width:100vw;height:100vh;overflow:hidden;">
+<div style="width:100%;height:100%;background:#000;overflow:hidden;position:relative;">
+<canvas id="c" style="display:block;width:100%;height:100%;"></canvas>
+<div id="ui" style="position:absolute;top:10px;left:10px;color:#fff;font-family:monospace;font-size:14px;pointer-events:none;">
+<div>Vidas: <span id="lives">3</span></div>
+<div>Pontos: <span id="score">0</span></div>
+</div>
+<div id="keys" style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;">
+<div style="color:#aaa;font-size:11px;margin-bottom:4px;font-family:monospace;">usa as setas para mover o escudo</div>
+<div style="display:flex;gap:4px;">
+<div id="ku" style="width:36px;height:36px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;">↑</div>
+</div>
+<div style="display:flex;gap:4px;">
+<div id="kl" style="width:36px;height:36px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;">←</div>
+<div id="kd" style="width:36px;height:36px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;">↓</div>
+<div id="kr" style="width:36px;height:36px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;">→</div>
+</div>
+</div>
+<div id="overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.7);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:monospace;">
+<div style="font-size:22px;margin-bottom:8px;">Cube Shield</div>
+<div style="font-size:13px;color:#aaa;margin-bottom:20px;text-align:center;">Usa as setas para rodar o escudo<br>e proteger a personagem dos tiros</div>
+<button id="startBtn" style="padding:10px 28px;font-size:15px;background:#2a6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:monospace;">Start</button>
+</div>
+</div>
+<script type="module">
+import * as THREE from "https://threejs.org/build/three.module.js";
+
+(function(){
+const canvas = document.getElementById('c');
+const livesEl = document.getElementById('lives');
+const scoreEl = document.getElementById('score');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+
+const W = canvas.clientWidth, H = canvas.clientHeight;
+canvas.width = W; canvas.height = H;
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+renderer.setClearColor(0x111122);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x111122, 15, 40);
+
+const camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 100);
+camera.position.set(0, 6, 10);
+camera.lookAt(0, 0, 0);
+
+const ambLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(5, 10, 5);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+const ground = new THREE.Mesh(
+new THREE.PlaneGeometry(30, 30),
+new THREE.MeshPhongMaterial({color:0x223344})
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -0.5;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const cube = new THREE.Mesh(
+new THREE.BoxGeometry(1, 1, 1),
+new THREE.MeshStandardMaterial({color:0x00cc66})
+);
+cube.position.y = 0;
+cube.castShadow = true;
+scene.add(cube);
+
+const shieldGeo = new THREE.BoxGeometry(1.2, 0.8, 0.25);
+const shieldMat = new THREE.MeshStandardMaterial({
+color:0x4488ff, transparent:true, opacity:0.75, emissive:0x112244
+});
+const shield = new THREE.Mesh(shieldGeo, shieldMat);
+shield.castShadow = true;
+scene.add(shield);
+
+const SHIELD_DIST = 1.1;
+let shieldAngle = 0;
+let targetAngle = 0;
+
+const DIRS = {
+ArrowUp: Math.PI,
+ArrowRight: Math.PI/2,
+ArrowDown: 0,
+ArrowLeft: -Math.PI/2
+};
+const KEY_ELS = {
+ArrowUp: document.getElementById('ku'),
+ArrowLeft: document.getElementById('kl'),
+ArrowDown: document.getElementById('kd'),
+ArrowRight: document.getElementById('kr')
+};
+
+let lives = 3, score = 0, gameRunning = false;
+const spheres = [];
+let spawnTimer = 0;
+const SPAWN_SEQ = ['front','right','back','left'];
+let seqIdx = 0;
+const clock = new THREE.Clock();
+
+function spawnSphere(side) {
+const r = 14;
+let x=0, z=0;
+if (side==='front') { x=0; z=r; }
+else if (side==='back') { x=0; z=-r; }
+else if (side==='right') { x=r; z=0; }
+else { x=-r; z=0; }
+
+const geo = new THREE.SphereGeometry(0.35, 12, 12);
+const mat = new THREE.MeshPhongMaterial({color:0xff3322, emissive:0x550000});
+const mesh = new THREE.Mesh(geo, mat);
+mesh.position.set(x, 0, z);
+mesh.castShadow = true;
+scene.add(mesh);
+
+const dir = new THREE.Vector3(-x, 0, -z).normalize();
+spheres.push({mesh, dir, speed: 4 + Math.random()*2, alive: true});
+}
+
+function highlightKey(key) {
+const el = KEY_ELS[key];
+if (!el) return;
+el.style.background = 'rgba(68,136,255,0.5)';
+setTimeout(()=>{ el.style.background='rgba(255,255,255,0.15)'; }, 200);
+}
+
+document.addEventListener('keydown', e => {
+if (DIRS[e.key] !== undefined && gameRunning) {
+targetAngle = DIRS[e.key];
+highlightKey(e.key);
+e.preventDefault();
+}
+});
+
+function updateShield() {
+let diff = targetAngle - shieldAngle;
+while (diff > Math.PI) diff -= Math.PI*2;
+while (diff < -Math.PI) diff += Math.PI*2;
+shieldAngle += diff * 0.2;
+
+shield.position.x = Math.sin(shieldAngle) * SHIELD_DIST;
+shield.position.z = Math.cos(shieldAngle) * SHIELD_DIST;
+shield.position.y = 0;
+shield.rotation.y = shieldAngle;
+}
+
+const shieldBox = new THREE.Box3();
+const sphereBox = new THREE.Box3();
+const cubeBox = new THREE.Box3();
+
+function updateSpheres(dt) {
+shieldBox.setFromObject(shield).expandByScalar(0.1);
+cubeBox.setFromObject(cube).expandByScalar(0.1);
+
+for (let i = spheres.length-1; i >= 0; i--) {
+const s = spheres[i];
+if (!s.alive) continue;
+s.mesh.position.addScaledVector(s.dir, s.speed * dt);
+
+sphereBox.setFromObject(s.mesh);
+
+if (sphereBox.intersectsBox(shieldBox)) {
+    score++;
+    scoreEl.textContent = score;
+    flashShield();
+    scene.remove(s.mesh);
+    spheres.splice(i, 1);
+    continue;
+}
+
+if (sphereBox.intersectsBox(cubeBox)) {
+    lives--;
+    livesEl.textContent = lives;
+    flashCube();
+    scene.remove(s.mesh);
+    spheres.splice(i, 1);
+    if (lives <= 0) endGame();
+    continue;
+}
+
+if (s.mesh.position.length() > 20) {
+    scene.remove(s.mesh);
+    spheres.splice(i, 1);
+}
+}
+}
+
+function flashShield() {
+shieldMat.color.set(0xffffff);
+shieldMat.emissive.set(0x4488ff);
+setTimeout(()=>{ shieldMat.color.set(0x4488ff); shieldMat.emissive.set(0x112244); }, 150);
+}
+function flashCube() {
+cube.material.color.set(0xff0000);
+setTimeout(()=>{ cube.material.color.set(0x00cc66); }, 250);
+}
+
+function endGame() {
+gameRunning = false;
+overlay.innerHTML = `
+<div style="font-size:20px;margin-bottom:8px;">Defeat</div>
+<div style="font-size:14px;color:#aaa;margin-bottom:16px;">Pontuação: ${score}</div>
+<button id="startBtn" style="padding:10px 28px;font-size:15px;background:#2a6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:monospace;" onclick="location.reload()">Jogar de novo</button>
+`;
+overlay.style.display = 'flex';
+}
+
+function startGame() {
+lives = 3; score = 0;
+livesEl.textContent = lives;
+scoreEl.textContent = score;
+spheres.forEach(s => scene.remove(s.mesh));
+spheres.length = 0;
+overlay.style.display = 'none';
+gameRunning = true;
+clock.start();
+}
+
+startBtn.addEventListener('click', startGame);
+
+let t = 0;
+function animate() {
+requestAnimationFrame(animate);
+const dt = clock.getDelta();
+if (!gameRunning) { renderer.render(scene, camera); return; }
+
+updateShield();
+
+spawnTimer -= dt;
+if (spawnTimer <= 0) {
+spawnSphere(SPAWN_SEQ[seqIdx % SPAWN_SEQ.length]);
+seqIdx++;
+spawnTimer = 1.5 + Math.random() * 1.2;
+}
+
+updateSpheres(dt);
+renderer.render(scene, camera);
+}
+animate();
+})();
+</script>
+</div>
+</body>
+</html>
