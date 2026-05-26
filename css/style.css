@@ -1,0 +1,381 @@
+:root {
+  --bg: #071019;
+  --panel: rgba(7, 15, 26, 0.84);
+  --panel-strong: rgba(4, 10, 18, 0.94);
+  --border: rgba(150, 193, 255, 0.28);
+  --text: #ecf6ff;
+  --muted: #9fb3c9;
+  --gold: #ffcc00;
+  --gold-ready: #ffaa00;
+  --danger: #ff5a6b;
+  --safe: #39d48b;
+  --blue: #4f92ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(79, 146, 255, 0.15), transparent 35%),
+    linear-gradient(180deg, #04070d 0%, #08131f 42%, #050912 100%);
+  color: var(--text);
+  font-family: "Space Grotesk", sans-serif;
+}
+
+body {
+  user-select: none;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.screen,
+.hud,
+.dialogue-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: auto;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.menu-screen {
+  background:
+    linear-gradient(rgba(4, 8, 14, 0.35), rgba(4, 8, 14, 0.6)),
+    url("../images/menu.png") center/cover no-repeat;
+}
+
+.menu-panel {
+  width: min(560px, 100%);
+  padding: 40px 32px 28px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(5, 12, 20, 0.66), rgba(5, 11, 18, 0.92));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+
+.title {
+  margin: 0 0 20px;
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(1.75rem, 4vw, 3rem);
+  line-height: 1.3;
+}
+
+.menu-subtitle {
+  margin: 0 0 28px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.button-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.game-button,
+.tab-button {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(34, 65, 107, 0.95), rgba(16, 31, 53, 0.95));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.game-button {
+  padding: 16px 18px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.game-button:hover,
+.tab-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.instructions-panel {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(4, 9, 15, 0.84);
+  text-align: left;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tab-button {
+  padding: 10px 14px;
+  font-size: 0.9rem;
+}
+
+.tab-button.active {
+  background: linear-gradient(180deg, rgba(71, 123, 209, 0.98), rgba(28, 57, 105, 0.98));
+}
+
+.instructions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.instructions-table th,
+.instructions-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.instructions-note {
+  margin: 14px 0 0;
+  color: #d9e7ff;
+  font-size: 0.9rem;
+}
+
+.github-link {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(6, 12, 21, 0.86);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  pointer-events: auto;
+}
+
+.loading-screen,
+.overlay-screen {
+  background: rgba(0, 0, 0, 0.84);
+}
+
+.loading-card,
+.overlay-card {
+  width: min(520px, 100%);
+  padding: 28px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  text-align: center;
+}
+
+.loading-bar,
+.bar-shell {
+  width: 100%;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.loading-fill,
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+}
+
+.loading-fill {
+  background: linear-gradient(90deg, #3e79ff, #88d9ff);
+}
+
+.hud {
+  padding: 24px;
+}
+
+.hud-top,
+.hud-bottom {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+}
+
+.hud-top {
+  top: 20px;
+}
+
+.hud-bottom {
+  bottom: 20px;
+}
+
+.hud-card {
+  max-width: 520px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(6, 12, 21, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.boss-line,
+.player-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.boss-line {
+  margin-bottom: 10px;
+}
+
+.label {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.hearts {
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+}
+
+.bar-fill.boss {
+  background: linear-gradient(90deg, #ff7f87, #ff4659);
+}
+
+.bar-fill.attack {
+  background: linear-gradient(90deg, var(--gold), #ffb200);
+  transition: width 160ms linear;
+}
+
+.bar-fill.attack.ready {
+  background: linear-gradient(90deg, var(--gold-ready), #ffe17a);
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
+.status-text {
+  min-width: 90px;
+  text-align: right;
+  color: var(--muted);
+}
+
+.dialogue-balloon {
+  position: absolute;
+  min-width: 280px;
+  max-width: 380px;
+  padding: 16px 18px;
+  border: 3px solid #102338;
+  border-radius: 18px;
+  background: #fff;
+  color: #0f1722;
+  transform: translate(-50%, -100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+
+.dialogue-balloon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  width: 24px;
+  height: 24px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #fff;
+  border-right: 3px solid #102338;
+  border-bottom: 3px solid #102338;
+}
+
+.dialogue-text {
+  min-height: 44px;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.dialogue-hint {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #56657a;
+  text-transform: uppercase;
+}
+
+.overlay-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.overlay-title {
+  margin: 0 0 12px;
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(1.25rem, 3vw, 2rem);
+  line-height: 1.4;
+}
+
+.overlay-copy {
+  margin: 0;
+  color: var(--muted);
+}
+
+@keyframes pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
+@media (max-width: 700px) {
+  .menu-panel,
+  .loading-card,
+  .overlay-card {
+    padding: 24px 18px;
+  }
+
+  .hud {
+    padding: 16px;
+  }
+
+  .hud-top,
+  .hud-bottom {
+    left: 16px;
+    right: 16px;
+  }
+
+  .hud-card {
+    max-width: none;
+  }
+
+  .boss-line,
+  .player-line {
+    flex-wrap: wrap;
+  }
+
+  .dialogue-balloon {
+    min-width: 220px;
+    max-width: min(320px, calc(100vw - 24px));
+  }
+}
