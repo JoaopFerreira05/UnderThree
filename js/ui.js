@@ -162,7 +162,7 @@ export function createUI(root) {
   function setScreen(name) {
     menuScreen.classList.toggle("hidden", name !== "menu");
     loadingScreen.classList.toggle("hidden", name !== "loading");
-    hud.classList.toggle("hidden", !["intro", "phase1", "phase2", "victory-dialogue", "defeat"].includes(name));
+    hud.classList.toggle("hidden", !["intro", "phase1", "phase2", "victory-dialogue", "defeat-dialogue", "defeat"].includes(name));
     overlay.classList.toggle("hidden", !["victory", "defeat"].includes(name));
   }
 

@@ -1,8 +1,16 @@
 import * as THREE from "three";
+import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { GameState } from "./main.js";
 
 const PLAYER_COLOR = 0x00cc66;
 const SHIELD_COLOR = 0x4488ff;
+const STICKMAN_MODEL_PATH = "./stickman/source/Simple_Character.fbx";
+const STICKMAN_TEXTURE_PATH = "./stickman/textures/Texture.0.1.png";
+const STICKMAN_TARGET_HEIGHT = 1.35;
+const STICKMAN_Y_OFFSET = -0.5;
+const STICKMAN_FORWARD_OFFSET = Math.PI;
+const RUN_BOB_SPEED = 12;
+const RUN_BOB_HEIGHT = 0.08;
 const MAX_LIVES = 4;
 const ATTACK_CHARGE_TIME = 20;
 const MOVE_SPEED = 5;
@@ -52,6 +60,7 @@ export function createPlayer(scene) {
 
   const playerBox = new THREE.Box3();
   const shieldBox = new THREE.Box3();
+  const modelBox = new THREE.Box3();
   let currentShieldAngle = Math.PI;
   let targetShieldAngle = Math.PI;
   let activeShieldKey = "w";
@@ -59,6 +68,139 @@ export function createPlayer(scene) {
   let isJumping = false;
   let invincibleTimer = 0;
   let hitFlashTimer = 0;
+  let stickmanRoot = null;
+  let stickmanModel = null;
+  let stickmanMixer = null;
+  let idleAction = null;
+  let runningAction = null;
+  let currentAction = null;
+  let runAnimTime = 0;
+  let modelBaseY = STICKMAN_Y_OFFSET;
+  const originalModelMaterials = [];
+
+  function syncStickmanTransform() {
+    if (!stickmanRoot) {
+      return;
+    }
+    stickmanRoot.position.set(mesh.position.x, mesh.position.y + modelBaseY, mesh.position.z);
+  }
+
+  function switchAction(nextAction) {
+    if (!nextAction || nextAction === currentAction) {
+      return;
+    }
+    if (currentAction) {
+      currentAction.fadeOut(0.15);
+    }
+    nextAction.reset().fadeIn(0.15).play();
+    currentAction = nextAction;
+  }
+
+  function setStickmanDirection(move) {
+    if (!stickmanRoot || move.lengthSq() === 0) {
+      return;
+    }
+    const targetRotation = Math.atan2(move.x, move.z) + STICKMAN_FORWARD_OFFSET;
+    let diff = targetRotation - stickmanRoot.rotation.y;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    stickmanRoot.rotation.y += diff * 0.35;
+  }
+
+  function updateProceduralRun(isMoving, delta) {
+    if (!stickmanRoot) {
+      return;
+    }
+
+    if (isMoving) {
+      runAnimTime += delta * RUN_BOB_SPEED;
+      stickmanRoot.position.y = mesh.position.y + modelBaseY + Math.sin(runAnimTime) * RUN_BOB_HEIGHT;
+      stickmanRoot.rotation.z = Math.sin(runAnimTime) * 0.06;
+    } else {
+      stickmanRoot.position.y = THREE.MathUtils.lerp(stickmanRoot.position.y, mesh.position.y + modelBaseY, Math.min(delta * 10, 1));
+      stickmanRoot.rotation.z = THREE.MathUtils.lerp(stickmanRoot.rotation.z, 0, Math.min(delta * 10, 1));
+    }
+  }
+
+  function setupStickmanAnimations(animations) {
+    if (!animations.length || !stickmanModel) {
+      return;
+    }
+
+    stickmanMixer = new THREE.AnimationMixer(stickmanModel);
+    const byName = (name) => animations.find((clip) => clip.name.toLowerCase().includes(name));
+    const idleClip = byName("idle") ?? animations[0];
+    const runClip = byName("run") ?? byName("walk") ?? byName("running");
+
+    idleAction = stickmanMixer.clipAction(idleClip);
+    idleAction.setLoop(THREE.LoopRepeat);
+    idleAction.play();
+    currentAction = idleAction;
+
+    if (runClip && runClip !== idleClip) {
+      runningAction = stickmanMixer.clipAction(runClip);
+      runningAction.setLoop(THREE.LoopRepeat);
+    }
+  }
+
+  function normalizeStickmanModel(model) {
+    modelBox.setFromObject(model);
+    const size = new THREE.Vector3();
+    modelBox.getSize(size);
+    if (size.y > 0) {
+      model.scale.multiplyScalar(STICKMAN_TARGET_HEIGHT / size.y);
+    }
+
+    modelBox.setFromObject(model);
+    model.position.y -= modelBox.min.y;
+    model.rotation.y = STICKMAN_FORWARD_OFFSET;
+  }
+
+  function loadStickmanModel() {
+    const texture = new THREE.TextureLoader().load(STICKMAN_TEXTURE_PATH);
+    texture.flipY = true;
+
+    const loader = new FBXLoader();
+    loader.load(
+      STICKMAN_MODEL_PATH,
+      (object) => {
+        stickmanRoot = new THREE.Group();
+        stickmanModel = object;
+        normalizeStickmanModel(stickmanModel);
+
+        stickmanModel.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.material) {
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              materials.forEach((mat) => {
+                mat.map = mat.map ?? texture;
+                mat.needsUpdate = true;
+                originalModelMaterials.push({
+                  material: mat,
+                  color: mat.color?.clone(),
+                  emissive: mat.emissive?.clone()
+                });
+              });
+            }
+          }
+        });
+
+        stickmanRoot.add(stickmanModel);
+        scene.add(stickmanRoot);
+        mesh.visible = false;
+        setupStickmanAnimations(object.animations ?? []);
+        syncStickmanTransform();
+      },
+      undefined,
+      (error) => {
+        console.warn("Could not load stickman model, keeping cube player.", error);
+      }
+    );
+  }
+
+  loadStickmanModel();
 
   function resetState() {
     GameState.playerHP = MAX_LIVES;
@@ -73,6 +215,10 @@ export function createPlayer(scene) {
     hitFlashTimer = 0;
     material.emissive.setHex(0x000000);
     setShieldDirection("arrowup");
+    if (idleAction) {
+      switchAction(idleAction);
+    }
+    syncStickmanTransform();
   }
 
   function setShieldDirection(key) {
@@ -117,6 +263,10 @@ export function createPlayer(scene) {
     invincibleTimer = INVINCIBILITY_DURATION;
     hitFlashTimer = HIT_FLASH_MS / 1000;
     material.emissive.setHex(0xff0000);
+    originalModelMaterials.forEach(({ material: mat }) => {
+      if (mat.color) mat.color.setHex(0xff5555);
+      if (mat.emissive) mat.emissive.setHex(0x550000);
+    });
     return true;
   }
 
@@ -151,6 +301,7 @@ export function createPlayer(scene) {
       shadow.position.z = mesh.position.z;
       clampToArena();
     }
+    return move;
   }
 
   function updateJump(delta) {
@@ -177,14 +328,24 @@ export function createPlayer(scene) {
 
   function update(keysHeld, delta) {
     updateAttackCharge(delta);
+    let move = new THREE.Vector3();
+    let isMoving = false;
+
     if (GameState.phase === "PHASE2") {
-      updateMovement(keysHeld, delta);
+      move = updateMovement(keysHeld, delta);
+      isMoving = move.lengthSq() > 0;
+      setStickmanDirection(move);
       updateJump(delta);
     } else {
       mesh.position.y = 0.5;
       shadow.scale.setScalar(1);
     }
 
+    if (stickmanMixer) {
+      switchAction(isMoving && runningAction ? runningAction : idleAction);
+    }
+    syncStickmanTransform();
+    updateProceduralRun(isMoving && !runningAction, delta);
     updateShieldTransform(delta);
 
     if (invincibleTimer > 0) {
@@ -194,6 +355,10 @@ export function createPlayer(scene) {
       hitFlashTimer = Math.max(0, hitFlashTimer - delta);
       if (hitFlashTimer === 0) {
         material.emissive.setHex(0x000000);
+        originalModelMaterials.forEach(({ material: mat, color, emissive }) => {
+          if (color && mat.color) mat.color.copy(color);
+          if (emissive && mat.emissive) mat.emissive.copy(emissive);
+        });
       }
     }
   }
@@ -208,6 +373,7 @@ export function createPlayer(scene) {
   function centerPlayer() {
     mesh.position.set(0, 0.5, 0);
     shadow.position.set(0, 0.02, 0);
+    syncStickmanTransform();
   }
 
   function getPlayerBox() {
@@ -235,6 +401,7 @@ export function createPlayer(scene) {
     centerPlayer,
     getPlayerBox,
     getShieldBox,
+    getMixer: () => stickmanMixer,
     isAirborne: () => isJumping,
     getPosition: () => mesh.position
   };

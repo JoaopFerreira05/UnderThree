@@ -16,12 +16,13 @@ export const GameState = {
 };
 
 const INTRO_LINES = [
-  "Então queres entrar para a guarda real, huh?",
+  "Ent\u00e3o queres entrar para a guarda real, huh?",
   "Para isso tens de provar o teu valor!"
 ];
-const VICTORY_LINES = ["GG"];
+const VICTORY_LINES = ["Parab\u00e9ns! Entraste na guarda real!"];
+const DEFEAT_LINES = ["N\u00e3o tens garra que chegue para entrar na guarda real."];
 const TYPEWRITER_MS = 40;
-const VICTORY_AUTO_MS = 3000;
+const END_DIALOGUE_AUTO_MS = 3000;
 
 const canvas = document.getElementById("game-canvas");
 const ui = createUI(document.getElementById("ui-root"));
@@ -79,7 +80,7 @@ function setPhase(nextPhase) {
   } else if (nextPhase === "PHASE2") {
     sceneBundle.setCameraMode("PHASE2");
     phase2.enter();
-  } else if (nextPhase === "INTRO_DIALOGUE" || nextPhase === "VICTORY_DIALOGUE") {
+  } else if (nextPhase === "INTRO_DIALOGUE" || nextPhase === "VICTORY_DIALOGUE" || nextPhase === "DEFEAT_DIALOGUE") {
     sceneBundle.setCameraMode("BOSS");
   }
 }
@@ -153,18 +154,19 @@ function handleAttack() {
     phase1.clearSpears();
     phase2.clearSpears();
     stopMusic();
+    boss.moveToStage();
     setPhase("VICTORY_DIALOGUE");
     beginDialogue(VICTORY_LINES, () => {
       GameState.phase = "VICTORY";
       ui.setScreen("victory");
       ui.showOverlay({
         title: "You won!",
-        copy: "Parabéns! Entraste para a guarda real.",
+        copy: "Parab\u00e9ns! Entraste para a guarda real.",
         buttons: [
           { label: "Menu", onClick: () => goToMenu() }
         ]
       });
-    }, { autoAfterComplete: VICTORY_AUTO_MS / 1000 });
+    }, { autoAfterComplete: END_DIALOGUE_AUTO_MS / 1000 });
   }
 }
 
@@ -172,16 +174,20 @@ function handleDefeat() {
   phase1.clearSpears();
   phase2.clearSpears();
   stopMusic();
-  GameState.phase = "DEFEAT";
-  ui.setScreen("defeat");
-  ui.showOverlay({
-    title: "GAME OVER",
-    copy: "Parece que não é desta que entras para a guarda real. Tu ainda não podes desistir...",
-    buttons: [
-      { label: "Jogar de novo", onClick: () => startRun() },
-      { label: "Menu", onClick: () => goToMenu() }
-    ]
-  });
+  boss.moveToStage();
+  setPhase("DEFEAT_DIALOGUE");
+  beginDialogue(DEFEAT_LINES, () => {
+    GameState.phase = "DEFEAT";
+    ui.setScreen("defeat");
+    ui.showOverlay({
+      title: "GAME OVER",
+      copy: "Parece que n\u00e3o \u00e9 desta que entras para a guarda real. Tu ainda n\u00e3o podes desistir...",
+      buttons: [
+        { label: "Jogar de novo", onClick: () => startRun() },
+        { label: "Menu", onClick: () => goToMenu() }
+      ]
+    });
+  }, { autoAfterComplete: END_DIALOGUE_AUTO_MS / 1000 });
 }
 
 function goToMenu() {
@@ -210,6 +216,7 @@ async function startRun() {
   ui.setScreen("intro");
   beginDialogue(INTRO_LINES, () => {
     startMusic();
+    boss.moveToWaterfall();
     ui.setScreen("phase1");
     setPhase("PHASE1");
   });
@@ -289,6 +296,7 @@ async function animate() {
   if (sceneBundle && player && boss) {
     sceneBundle.update(delta, elapsed);
     boss.update(delta);
+    player.getMixer?.()?.update(delta);
 
     if (GameState.phase === "PHASE1" || GameState.phase === "PHASE2") {
       player.update(keysHeld, delta);
@@ -303,7 +311,7 @@ async function animate() {
       ui.setScreen("phase1");
     }
 
-    if (GameState.playerHP <= 0 && GameState.phase !== "DEFEAT") {
+    if (GameState.playerHP <= 0 && GameState.phase !== "DEFEAT" && GameState.phase !== "DEFEAT_DIALOGUE") {
       handleDefeat();
     }
 
